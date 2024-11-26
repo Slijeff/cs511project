@@ -150,7 +150,7 @@ def benchmark():
 
     print("Running Ray tasks...")
     start_time = time.time()
-    tasks = [convolution_cpu.remote(100) for _ in range(100)]
+    tasks = [convolution_gpu.remote(100) for _ in range(100)]
     ray.get(tasks)
     end_time = time.time()
 

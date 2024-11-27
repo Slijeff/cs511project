@@ -1,5 +1,0 @@
-Machine model: MacBookPro18,3
-OS version: 24B91
-Boot arguments: 
-Boot time: Mon Nov 25 21:00:20 2024
-

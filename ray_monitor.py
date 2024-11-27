@@ -2,6 +2,7 @@ import signal
 import subprocess
 import sys
 import time
+from dataclasses import dataclass
 
 import coremltools as ct
 import numpy as np
@@ -26,19 +27,21 @@ def increment(n):
 def convolution_gpu(n):
     device = torch.device("mps")  # for M-series chips
     m = nn.Conv2d(16, 32, 3, stride=2, device=device)
-    _ = m(torch.randn(64, 16, n, n, device=device))
-    return _
+    res = m(torch.randn(64, 16, n, n, device=device))
+    res = res.mean().backward()
+    return res
 
 
 @ray.remote
 def convolution_cpu(n):
     m = nn.Conv2d(16, 32, 3, stride=2)
-    _ = m(torch.randn(64, 16, n, n))
-    return _
+    res = m(torch.randn(64, 16, n, n))
+    res = res.mean().backward()
+    return res
 
 
 @ray.remote
-def coreml_ane():
+def coreml_ane(n):  # note: the intensity has no effect here
     # Load Core ML model
     model = ct.models.MLModel("ResNet18.mlpackage")
 
@@ -131,7 +134,7 @@ def parse_powermetrics_log(log_file):
 # Run the benchmark
 def benchmark():
     log_file = "./powermetrics_log.txt"
-    interval = 500  # Sampling interval in milliseconds
+    interval =  BenchmarkConfig.sample_interval # Sampling interval in milliseconds
 
     print("Starting powermetrics...")
     # start_powermetrics(log_file, interval)
@@ -150,7 +153,10 @@ def benchmark():
 
     print("Running Ray tasks...")
     start_time = time.time()
-    tasks = [convolution_gpu.remote(100) for _ in range(100)]
+    tasks = [
+        BenchmarkConfig.task.remote(BenchmarkConfig.intensity)
+        for _ in range(BenchmarkConfig.repeat)
+    ]
     ray.get(tasks)
     end_time = time.time()
 
@@ -174,4 +180,12 @@ def benchmark():
 
 
 if __name__ == "__main__":
+    # configures the benchmark
+    @dataclass
+    class BenchmarkConfig:
+        task = increment
+        intensity = 1000
+        repeat = 1000
+        sample_interval = 500 # milliseconds
+
     benchmark()

@@ -1,3 +1,4 @@
+import math
 import signal
 import subprocess
 import sys
@@ -8,6 +9,7 @@ import coremltools as ct
 import numpy as np
 import ray
 import torch
+import torchvision
 from PIL import Image
 from torch import nn
 
@@ -24,20 +26,57 @@ def increment(n):
 
 
 @ray.remote
-def convolution_gpu(n):
-    device = torch.device("mps")  # for M-series chips
-    m = nn.Conv2d(16, 32, 3, stride=2, device=device)
-    res = m(torch.randn(64, 16, n, n, device=device))
-    res = res.mean().backward()
-    return res
+def factorial(n):
+    result = 1
+    for i in range(n):
+        result *= i
+    return result
 
 
 @ray.remote
-def convolution_cpu(n):
-    m = nn.Conv2d(16, 32, 3, stride=2)
-    res = m(torch.randn(64, 16, n, n))
-    res = res.mean().backward()
-    return res
+def is_prime(n):
+    if n <= 1:
+        return False
+    for i in range(2, int(math.sqrt(n)) + 1):
+        if n % i == 0:
+            return False
+    return True
+
+
+@ray.remote
+def gpu_inference(n):
+    model = torchvision.models.resnet18(
+        weights=torchvision.models.ResNet18_Weights.IMAGENET1K_V1).to("mps")
+    model.eval()
+    data = torch.rand((n, 3, 224, 224)).to("mps")
+    return model(data)
+
+
+@ray.remote
+def gpu_backprop(n):
+    model = torchvision.models.resnet18(
+        weights=torchvision.models.ResNet18_Weights.IMAGENET1K_V1).to("mps")
+    model.train()
+    data = torch.rand((n, 3, 224, 224)).to("mps")
+    return model(data).mean().backward()
+
+
+@ray.remote
+def cpu_inference(n):
+    model = torchvision.models.resnet18(
+        weights=torchvision.models.ResNet18_Weights.IMAGENET1K_V1).to("cpu")
+    data = torch.rand((n, 3, 224, 224)).to("cpu")
+    model.eval()
+    return model(data)
+
+
+@ray.remote
+def cpu_backprop(n):
+    model = torchvision.models.resnet18(
+        weights=torchvision.models.ResNet18_Weights.IMAGENET1K_V1).to("cpu")
+    model.train()
+    data = torch.rand((n, 3, 224, 224)).to("cpu")
+    return model(data).mean().backward()
 
 
 @ray.remote
@@ -68,7 +107,8 @@ def start_powermetrics(log_file, interval=500):
         str(interval),  # Interval in milliseconds
     ]
     with open(log_file, "w") as f:
-        powermetrics_process = subprocess.Popen(cmd, stdout=f, stderr=subprocess.STDOUT)
+        powermetrics_process = subprocess.Popen(
+            cmd, stdout=f, stderr=subprocess.STDOUT)
 
 
 # Stop powermetrics
@@ -134,7 +174,7 @@ def parse_powermetrics_log(log_file):
 # Run the benchmark
 def benchmark():
     log_file = "./powermetrics_log.txt"
-    interval =  BenchmarkConfig.sample_interval # Sampling interval in milliseconds
+    interval = BenchmarkConfig.sample_interval  # Sampling interval in milliseconds
 
     print("Starting powermetrics...")
     # start_powermetrics(log_file, interval)
@@ -147,7 +187,8 @@ def benchmark():
         str(interval),  # Interval in milliseconds
     ]
     f = open(log_file, "w")
-    powermetrics_process = subprocess.Popen(cmd, stdout=f, stderr=subprocess.STDOUT)
+    powermetrics_process = subprocess.Popen(
+        cmd, stdout=f, stderr=subprocess.STDOUT)
 
     time.sleep(1)  # Allow time for powermetrics to stabilize
 
@@ -179,13 +220,50 @@ def benchmark():
     print(f"Total energy consumption: {total_energy:.2f} Joules")
 
 
+def measure_baseline():
+    log_file = "./powermetrics_log.txt"
+    interval = BenchmarkConfig.sample_interval  # Sampling interval in milliseconds
+    duration = 10
+    print("Starting powermetrics...")
+    # start_powermetrics(log_file, interval)
+    cmd = [
+        "sudo",
+        "powermetrics",
+        "--samplers",
+        "cpu_power,gpu_power,ane_power",
+        "-i",
+        str(interval),  # Interval in milliseconds
+    ]
+    f = open(log_file, "w")
+    powermetrics_process = subprocess.Popen(
+        cmd, stdout=f, stderr=subprocess.STDOUT)
+    time.sleep(1)  # Allow time for powermetrics to stabilize
+    print("Collecting baseline measurements...")
+    time.sleep(duration)
+    if powermetrics_process:
+        print("Stopping powermetrics...")
+        f.close()
+        powermetrics_process.terminate()
+        powermetrics_process.wait()
+
+    print("Parsing powermetrics log...")
+    cpu_power, gpu_power, ane_power = parse_powermetrics_log(log_file)
+    print(f"Baseline duration: {duration:.2f} seconds")
+    print(f"Average CPU power: {cpu_power:.2f} W")
+    print(f"Average GPU power: {gpu_power:.2f} W")
+    print(f"Average ANE power: {ane_power:.2f} W")
+    total_energy = (cpu_power + gpu_power + ane_power) * duration
+    print(f"Total baseline energy consumption: {total_energy:.2f} Joules")
+
+
 if __name__ == "__main__":
     # configures the benchmark
     @dataclass
     class BenchmarkConfig:
-        task = increment
-        intensity = 1000
-        repeat = 1000
-        sample_interval = 500 # milliseconds
+        task = cpu_backprop
+        intensity = 8
+        repeat = 100
+        sample_interval = 500  # milliseconds
 
-    benchmark()
+    # benchmark()
+    measure_baseline()

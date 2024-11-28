@@ -1,4 +1,5 @@
 import math
+from operator import is_
 import signal
 import subprocess
 import sys
@@ -31,16 +32,6 @@ def factorial(n):
     for i in range(n):
         result *= i
     return result
-
-
-@ray.remote
-def is_prime(n):
-    if n <= 1:
-        return False
-    for i in range(2, int(math.sqrt(n)) + 1):
-        if n % i == 0:
-            return False
-    return True
 
 
 @ray.remote
@@ -261,9 +252,9 @@ if __name__ == "__main__":
     @dataclass
     class BenchmarkConfig:
         task = cpu_backprop
-        intensity = 8
-        repeat = 100
+        intensity = 1
+        repeat = 200
         sample_interval = 500  # milliseconds
 
-    # benchmark()
-    measure_baseline()
+    benchmark()
+    # measure_baseline()

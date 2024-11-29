@@ -26,7 +26,7 @@ def increment(n):
     return result
 
 
-@ray.remote
+# @ray.remote
 def factorial(n):
     result = 1
     for i in range(n):
@@ -34,7 +34,7 @@ def factorial(n):
     return result
 
 
-@ray.remote
+# @ray.remote
 def gpu_inference(n):
     model = torchvision.models.resnet18(
         weights=torchvision.models.ResNet18_Weights.IMAGENET1K_V1).to("mps")
@@ -43,7 +43,7 @@ def gpu_inference(n):
     return model(data)
 
 
-@ray.remote
+# @ray.remote
 def gpu_backprop(n):
     model = torchvision.models.resnet18(
         weights=torchvision.models.ResNet18_Weights.IMAGENET1K_V1).to("mps")
@@ -52,7 +52,7 @@ def gpu_backprop(n):
     return model(data).mean().backward()
 
 
-@ray.remote
+# @ray.remote
 def cpu_inference(n):
     model = torchvision.models.resnet18(
         weights=torchvision.models.ResNet18_Weights.IMAGENET1K_V1).to("cpu")
@@ -61,7 +61,7 @@ def cpu_inference(n):
     return model(data)
 
 
-@ray.remote
+# @ray.remote
 def cpu_backprop(n):
     model = torchvision.models.resnet18(
         weights=torchvision.models.ResNet18_Weights.IMAGENET1K_V1).to("cpu")
@@ -70,7 +70,7 @@ def cpu_backprop(n):
     return model(data).mean().backward()
 
 
-@ray.remote
+# @ray.remote
 def coreml_ane(n):  # note: the intensity has no effect here
     # Load Core ML model
     model = ct.models.MLModel("ResNet18.mlpackage")
@@ -183,13 +183,20 @@ def benchmark():
 
     time.sleep(1)  # Allow time for powermetrics to stabilize
 
-    print("Running Ray tasks...")
+    print("Running tasks...")
     start_time = time.time()
-    tasks = [
-        BenchmarkConfig.task.remote(BenchmarkConfig.intensity)
-        for _ in range(BenchmarkConfig.repeat)
-    ]
-    ray.get(tasks)
+    if BenchmarkConfig.use_ray:
+        task = ray.remote(BenchmarkConfig.task).remote
+        tasks = [
+            task(BenchmarkConfig.intensity)
+            for _ in range(BenchmarkConfig.repeat)
+        ]
+        ray.get(tasks)
+    else:
+        tasks = [
+            BenchmarkConfig.task(BenchmarkConfig.intensity)
+            for _ in range(BenchmarkConfig.repeat)
+        ]
     end_time = time.time()
 
     # stop_powermetrics()
@@ -251,10 +258,12 @@ if __name__ == "__main__":
     # configures the benchmark
     @dataclass
     class BenchmarkConfig:
-        task = cpu_backprop
-        intensity = 1
-        repeat = 200
+        task = cpu_inference
+        intensity = 2
+        repeat = 50
         sample_interval = 500  # milliseconds
+        use_ray = False
 
     benchmark()
     # measure_baseline()
+    ray.shutdown()

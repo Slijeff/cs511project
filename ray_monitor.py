@@ -1,5 +1,6 @@
 import math
 from operator import is_
+import os
 import signal
 import subprocess
 import sys
@@ -12,7 +13,7 @@ import ray
 import torch
 import torchvision
 from PIL import Image
-from torch import nn
+from torch import log_, nn
 
 # Initialize Ray
 ray.init()
@@ -164,7 +165,9 @@ def parse_powermetrics_log(log_file):
 
 # Run the benchmark
 def benchmark():
-    log_file = "./powermetrics_log.txt"
+    log_file = BenchmarkConfig.log_file
+    if not os.path.exists(os.path.dirname(log_file)):
+        os.makedirs(os.path.dirname(log_file))
     interval = BenchmarkConfig.sample_interval  # Sampling interval in milliseconds
 
     print("Starting powermetrics...")
@@ -219,7 +222,9 @@ def benchmark():
 
 
 def measure_baseline():
-    log_file = "./powermetrics_log.txt"
+    log_file = BenchmarkConfig.log_file
+    if not os.path.exists(os.path.dirname(log_file)):
+        os.makedirs(os.path.dirname(log_file))
     interval = BenchmarkConfig.sample_interval  # Sampling interval in milliseconds
     duration = 10
     print("Starting powermetrics...")
@@ -258,11 +263,12 @@ if __name__ == "__main__":
     # configures the benchmark
     @dataclass
     class BenchmarkConfig:
-        task = cpu_inference
+        task = cpu_backprop
         intensity = 2
-        repeat = 50
+        repeat = 200
         sample_interval = 500  # milliseconds
         use_ray = False
+        log_file = "./out/powermetrics_log_no_ray.txt"
 
     benchmark()
     # measure_baseline()

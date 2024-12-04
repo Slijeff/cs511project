@@ -1,3 +1,4 @@
+from cProfile import label
 from functools import reduce
 from numpy import dtype
 import seaborn as sns
@@ -171,7 +172,7 @@ def graph3():
     final_df = melted.drop(columns=["Ray_Metric"]).rename(
         columns={"Value": "Measurement"})
     final_df = final_df[["Repeat", "Ray", "Metric", "Measurement"]]
-
+    print(final_df)
     sns.relplot(
         data=final_df, x="Repeat", y="Measurement",
         hue="Ray", style="Ray", kind="line", markers=True
@@ -186,10 +187,125 @@ def graph3():
 
 
 def graph4():
-    ...
+    def to_float(df):
+        for col in df.columns:
+            if df[col].dtype == 'int64' and col != 'Intensity':
+                df[col] = df[col].astype('float64')
+        return df
+    df_jeff = pd.DataFrame(
+        {
+            'Intensity': [1, 2, 4, 8],
+            'Ray (cpu_inf)': [183.33, 210.40, 334.76, 355.67],
+            'Not Ray (cpu_inf)': [729.36, 822.36, 886.04, 1087.16],
+            'Ray (cpu_bp)': [226.69, 293.14, 418.78, 760.18],
+            'Not Ray (cpu_bp)': [875.73, 1073.46, 1293.16, 1861.23]
+        }
+    )
+
+    df_jerry = pd.DataFrame(
+        {
+            'Intensity': [1, 2, 4, 8],
+            'Ray (cpu_inf)': [266.5, 371, 542, 1000],
+            'Not Ray (cpu_inf)': [638, 705, 1016.5, 1489],
+            'Ray (cpu_bp)': [441, 725, 1284, 2493],
+            'Not Ray (cpu_bp)': [855, 1309.5, 1995, 3279]
+        }
+    )
+    df_jerry = to_float(df_jerry)
+
+    df_yibin = pd.DataFrame(
+        {
+            'Intensity': [1, 2, 4, 8],
+            'Ray (cpu_inf)': [261.21, 388.23, 591.38, 1019.63],
+            'Not Ray (cpu_inf)': [800.62, 957.40, 1015.49, 1857.47],
+            'Ray (cpu_bp)': [489.89, 781.13, 1282.59, 2594.08],
+            'Not Ray (cpu_bp)': [884.34, 1361.35, 1829.60, 3390.82]
+        }
+    )
+
+    df_yuanhao = pd.DataFrame(
+        {
+            'Intensity': [1, 2, 4, 8],
+            'Ray (cpu_inf)': [660, 847, 958, 1372],
+            'Not Ray (cpu_inf)': [2017, 2539, 2966, 4357],
+            'Ray (cpu_bp)': [920, 1250, 1792, 2980],
+            'Not Ray (cpu_bp)': [2229, 2728, 3630, 5704]
+        }
+    )
+    df_yuanhao = to_float(df_yuanhao)
+
+    df_merged = reduce(
+        lambda left, right: pd.merge(left, right, how='outer'),
+        [df_jeff, df_jerry, df_yibin, df_yuanhao]
+    )
+
+    melted = pd.melt(df_merged, id_vars=["Intensity"],
+                     var_name="Ray_Metric", value_name="Value")
+    melted["Ray"] = melted["Ray_Metric"].apply(lambda x: "Not Ray" not in x)
+    melted["Metric"] = melted["Ray_Metric"].apply(
+        lambda x: x.split(" ")[-1].strip("()"))
+
+    # Drop the original Ray_Metric column and reorder
+    final_df = melted.drop(columns=["Ray_Metric"]).rename(
+        columns={"Value": "Measurement"})
+    final_df = final_df[["Intensity", "Ray", "Metric", "Measurement"]]
+
+    sns.relplot(
+        data=final_df, x="Intensity", y="Measurement",
+        hue="Ray", style="Ray", kind="line", markers=True
+    )
+    plt.xlabel("Batch Size")
+    plt.ylabel("Energy Consumption (Joules)")
+    plt.title("Energy Consumption by Batch Size")
+    plt.savefig("./out/energy_consumption_by_batch_size.png",
+                dpi=300, bbox_inches='tight')
+    # plt.show()
+    plt.clf()
+    print(final_df)
+
+
+def graph5():
+    # https://ourworldindata.org/grapher/carbon-intensity-electricity?tab=chart&country=~USA
+    co2_per_kwh = 369
+    joules_to_kwh_factor = 2.78 * 10**(-7)
+    joules_per_task_no_ray = 7
+    joules_per_task_ray = 3
+    kwh_per_task_no_ray = joules_per_task_no_ray * joules_to_kwh_factor
+    kwh_per_task_ray = joules_per_task_ray * joules_to_kwh_factor
+    number_of_tasks = list(range(10_000, 10_000_000, 10_000))
+    kwh_for_tasks_no_ray = [
+        kwh_per_task_no_ray * n for n in number_of_tasks
+    ]
+    kwh_for_tasks_ray = [
+        kwh_per_task_ray * n for n in number_of_tasks
+    ]
+    co2_for_tasks_no_ray = [
+        co2_per_kwh * kwh for kwh in kwh_for_tasks_no_ray
+    ]
+    co2_for_tasks_ray = [
+        co2_per_kwh * kwh for kwh in kwh_for_tasks_ray
+    ]
+    df = pd.DataFrame({
+        "Number of Tasks": number_of_tasks,
+        "No Ray (CO2)": co2_for_tasks_no_ray,
+        "Ray (CO2)": co2_for_tasks_ray
+    })
+    sns.lineplot(data=df, x="Number of Tasks",
+                 y="No Ray (CO2)", label="No Ray")
+    sns.lineplot(data=df, x="Number of Tasks", y="Ray (CO2)", label="Ray")
+    plt.xlabel("Number of Tasks")
+    plt.ylabel("CO2 Emissions (gCO2)")
+    plt.legend()
+    plt.title("CO2 Emissions by Number of Tasks (GPU Training, CO2 per KWH = 369)")
+    plt.savefig("./out/co2_emissions_by_tasks.png",
+                dpi=300, bbox_inches='tight')
+    # plt.show()
+    plt.clf()
 
 
 if __name__ == "__main__":
-    graph1()
-    graph2()
-    graph3()
+    # graph1()
+    # graph2()
+    # graph3()
+    # graph4()
+    graph5()

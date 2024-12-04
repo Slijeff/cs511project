@@ -5,7 +5,7 @@ from matplotlib import pyplot as plt
 import numpy as np
 import seaborn as sns
 
-sns.set_theme(palette="twilight_shifted")
+sns.set_theme(palette="Set2")
 
 
 def log_to_graph(log_file, interval=500):
@@ -29,7 +29,7 @@ def log_to_graph(log_file, interval=500):
 def logs_to_ray_comparison(log_directory, interval=500):
     # Read all log files in the directory
     log_files = [f for f in os.listdir(log_directory) if f.endswith(".txt")]
-    all_powers = []  # a 2d list of powers
+    all_powers = {}
     times = []  # take the max time from all the log files
     for log_file in log_files:
         powers = []
@@ -42,20 +42,29 @@ def logs_to_ray_comparison(log_directory, interval=500):
         cur_times = [t / 1000 for t in cur_times]
         if len(cur_times) > len(times):
             times = cur_times
-        all_powers.append(powers)
-    ray = all_powers[1]
-    no_ray = all_powers[0]
+        all_powers[log_file] = powers
+    ray = all_powers["powermetrics_log_ray.txt"]
+    no_ray = all_powers["powermetrics_log_no_ray.txt"]
+    ray_gpu = all_powers["powermetrics_log_ray_gpu.txt"]
+    no_ray_gpu = all_powers["powermetrics_log_no_ray_gpu.txt"]
     # create the figure and axes
     fig, ax = plt.subplots()
-    sns.regplot(x=times[:len(ray)], y=ray, ax=ax,
-                label="Ray", order=3, fit_reg=True)
+    common_args = dict(ax=ax, order=3, fit_reg=True,
+                       ci=50, scatter_kws={"alpha": 0.2})
+    sns.regplot(x=times[:len(ray)], y=ray,
+                label="Ray (CPU)", **common_args)
     sns.regplot(x=times[:len(no_ray)], y=no_ray,
-                ax=ax, label="No Ray", order=3, fit_reg=True)
+                label="No Ray (CPU)", **common_args)
+    sns.regplot(x=times[:len(ray_gpu)], y=ray_gpu,
+                label="Ray (GPU)", **common_args)
+    sns.regplot(x=times[:len(no_ray_gpu)], y=no_ray_gpu,
+                label="No Ray (GPU)", **common_args)
     ax.set_xlabel("Time (Seconds)")
     ax.set_ylabel("Total Power (Watts)")
-    ax.set_title("Power Consumption (Batch Size = 2, Tasks = 200)")
+    ax.set_title("Power Consumption by Time (Batch Size = 2, Tasks = 200)")
     ax.legend()
-    plt.savefig("./out/power_consumption_comparison.png", dpi=300)
+    plt.savefig("./out/power_consumption_comparison.png",
+                dpi=300, bbox_inches='tight')
     plt.clf()
     # plt.show()
 

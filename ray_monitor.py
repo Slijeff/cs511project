@@ -263,12 +263,12 @@ if __name__ == "__main__":
     # configures the benchmark
     @dataclass
     class BenchmarkConfig:
-        task = cpu_backprop
+        task = gpu_backprop
         intensity = 2
         repeat = 200
         sample_interval = 500  # milliseconds
         use_ray = False
-        log_file = "./out/powermetrics_log_no_ray.txt"
+        log_file = "./out/powermetrics_log_no_ray_gpu.txt"
 
     benchmark()
     # measure_baseline()
